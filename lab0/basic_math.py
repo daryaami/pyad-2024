@@ -7,16 +7,16 @@ def matrix_multiplication(matrix_a, matrix_b):
     Задание 1. Функция для перемножения матриц с помощью списков и циклов.
     Вернуть нужно матрицу в формате списка.
     """
+    matrix_a, matrix_b = np.array(matrix_a), np.array(matrix_b)
     if not matrix_a.shape[1] == matrix_b.shape[0]:
-        return None
+        raise ValueError('Размеры матриц неверные.')
     mult_result = np.ndarray(shape=(matrix_a.shape[0], matrix_b.shape[1]))
     m = matrix_a.shape[0]
     p =  matrix_b.shape[1]
     for j in range(m):
         for k in range(p):
             mult_result[j, k] = sum(np.multiply(matrix_a[j, :], matrix_b[:, k]))
-    
-    return mult_result
+    return mult_result.tolist()
 
 
 def functions(a_1, a_2):
