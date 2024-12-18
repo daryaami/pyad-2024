@@ -1,8 +1,6 @@
 import pickle
-import re
 import pandas as pd
 import string
-import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from pandas import DataFrame
@@ -44,7 +42,7 @@ def books_preprocessing(df: pd.DataFrame) -> pd.DataFrame:
 
     books_df = books_df.drop(books_df[books_df['Book-Title'] == ''].index, axis=0)
     books_df = books_df.drop(books_df[books_df['Year-Of-Publication'] == 0].index, axis=0)
-
+    print('Finished preprocessing books;')
     return books_df
 
 
@@ -59,8 +57,8 @@ def ratings_preprocessing(df: pd.DataFrame) -> pd.DataFrame:
     rating_df = rating_df[rating_df.groupby("User-ID")["Book-Rating"].transform("count") > 1]
     rating_df = rating_df.reset_index(drop=True).dropna()
     rating_prep = rating_df.groupby('ISBN')['Book-Rating'].mean().reset_index(name='Average-Rating')
+    print('Finished preprocessing ratings;')
     return rating_prep
-
 
 def title_preprocessing(text: str) -> str:
     """Функция для нормализации текстовых данных в стобце Book-Title:
@@ -89,7 +87,7 @@ def modeling(books: pd.DataFrame, ratings: pd.DataFrame) -> None:
     6. Подобрать гиперпараметры (при необходимости)
     7. Сохранить модель"""
     # Объединяем датасеты
-    merged_df = pd.merge(left=books, right=ratings, how='left', on='ISBN').dropna()
+    merged_df = pd.merge(left=books_prep, right=ratings_prep, how='left', on='ISBN').dropna()
     X = merged_df[['Book-Author', 'Publisher', 'Year-Of-Publication', 'Book-Title']]
     y = merged_df['Average-Rating']
 
@@ -101,21 +99,25 @@ def modeling(books: pd.DataFrame, ratings: pd.DataFrame) -> None:
     X_train[['Book-Author', 'Publisher']] = target_encoder.fit_transform(X_train[['Book-Author', 'Publisher']],
                                                                          y_train)
     X_test[['Book-Author', 'Publisher']] = target_encoder.transform(X_test[['Book-Author', 'Publisher']])
+    with open("target_encoder.pkl", "wb") as file:
+        pickle.dump(target_encoder, file)
 
     # Векторизуем Book-Title
-    vect_titles = TfidfVectorizer(stop_words='english', max_features=1000, ngram_range=(1, 2))
+    vect_titles = TfidfVectorizer(stop_words='english', max_features=1000)
     X_train_vector = vect_titles.fit_transform(X_train["Book-Title"])
     X_test_vector = vect_titles.transform(X_test["Book-Title"])
+    with open("tfidf_vectorizer.pkl", "wb") as file:
+        pickle.dump(vect_titles, file)
 
     train_vec_df = pd.DataFrame.sparse.from_spmatrix(X_train_vector, index=X_train.index)
     test_vec_df = pd.DataFrame.sparse.from_spmatrix(X_test_vector, index=X_test.index)
 
-    # Удаляем старый столбец Book-Title
+    # Удаляем столбец с названиями книг
     X_train = X_train.drop(columns=['Book-Title'])
     X_test = X_test.drop(columns=['Book-Title'])
 
     # Объединяем обработанные данные
-    X_train_final: DataFrame = pd.concat([X_train, train_vec_df], axis=1)
+    X_train_final = pd.concat([X_train, train_vec_df], axis=1)
     X_test_final = pd.concat([X_test, test_vec_df], axis=1)
 
     X_train_final.columns = X_train_final.columns.astype(str)
@@ -126,17 +128,19 @@ def modeling(books: pd.DataFrame, ratings: pd.DataFrame) -> None:
     cols = X_train_final.columns
     X_train_final[cols] = scaler.fit_transform(X_train_final[cols])
     X_test_final[cols] = scaler.transform(X_test_final[cols])
+    with open("scaler.pkl", "wb") as file:
+        pickle.dump(scaler, file)
 
-    # Train model
+    # Обучаем модель
     linreg = SGDRegressor(random_state=42, learning_rate='adaptive', early_stopping=True)
     linreg.fit(X_train_final, y_train)
 
-    # Evaluate
+    # Оценка
     y_pred = linreg.predict(X_test_final)
     mae = mean_absolute_error(y_test, y_pred)
+
     print(f"MAE: {mae}")
 
-    # Save model
     with open("linreg.pkl", "wb") as file:
         pickle.dump(linreg, file)
 
@@ -145,7 +149,7 @@ if __name__ == '__main__':
     ratings = pd.read_csv("Ratings.csv", low_memory=False)
     books = pd.read_csv("Books.csv", low_memory=False)
 
-    ratings = ratings_preprocessing(ratings)
-    books = books_preprocessing(books)
+    ratings_prep = ratings_preprocessing(ratings)
+    books_prep = books_preprocessing(books)
 
-    modeling(books, ratings)
+    modeling(books_prep, ratings_prep)

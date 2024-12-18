@@ -25,7 +25,7 @@ def modeling(ratings: pd.DataFrame) -> None:
     reader = Reader(rating_scale=(1, 10))
     data = Dataset.load_from_df(ratings, reader)
 
-    svd = SVD(n_factors=1, random_state=42, reg_all=0.05, lr_all=0.01)
+    svd = SVD(n_factors=500, random_state=42, reg_all=0.05, lr_all=0.01)
 
     trainset, testset = train_test_split(data, test_size=0.2)
 
@@ -34,9 +34,6 @@ def modeling(ratings: pd.DataFrame) -> None:
 
     acc = accuracy.mae(predictions)
     print(acc)
-
-    svd = SVD(n_factors=1, random_state=42, reg_all=0.05, lr_all=0.01)
-    svd.fit(data)
 
     with open("svd.pkl", "wb") as file:
         pickle.dump(svd, file)
